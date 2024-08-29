@@ -1,0 +1,9 @@
+[package]
+name = "auto-regex"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lazy_static = "*"
+difflib = "*"
+regex = "*"
