@@ -2,14 +2,11 @@ use std::i32;
 use difflib::sequencematcher::SequenceMatcher;
 use lazy_static::lazy_static;
 use regex::Regex;
-use log::warn;
+use log::error;
 
 lazy_static! {
     static ref RE_TOK: Regex =
         Regex::new(r"(\\*\(\\+d\\*\+\\*\)|\\*\(\\*\.\\*\+\\*\)|[^\d\W]+|[0-9]+|\W)").unwrap();
-    static ref RE_PUNCT: Regex = Regex::new(r"^[\s,._;:]$").unwrap();
-    pub static ref RE_UNESC: Regex =
-        Regex::new(r"\\([\\\.\+\*\?\(\)\|\[\]\{\}\^\$\#\&\-\~])").unwrap();
 }
 
 fn tokenize(text: &str) -> Vec<String> {
@@ -37,7 +34,7 @@ fn regex_from_pair(sample1: &str, sample2: &str) -> Option<Regex> {
             return None;
         }
         let var_is_num = var1.parse::<u16>().is_ok() && var2.parse::<u16>().is_ok();
-        if var_is_num || !RE_PUNCT.is_match(&cst) || m.size == 0 {
+        if m.size > 0 {
             if var1.len() > 0 {
                 if var_is_num {
                     rule += r"(\d+)";
@@ -58,17 +55,20 @@ fn regex_from_pair(sample1: &str, sample2: &str) -> Option<Regex> {
     }
 }
 
-fn score_regex(matched: &Vec<String>, total_samples: usize, regex: &Regex) -> i32 {
-    if matched.len() < 2 {
+fn score_regex(example: &str, regex: &Regex, matched: usize, total: usize) -> i32 {
+    if matched < 2 {
         return 0;
     }
-    let matched_part = matched.len() as f32/total_samples as f32;
-    let variable_part = regex.as_str().len() as f32/matched[0].len() as f32;
+    let matched_part = matched as f32/total as f32;
+    let variable_part = regex.as_str().len() as f32/example.len() as f32;
     ((matched_part*variable_part)*100.) as i32
 }
 
-fn first_regex(example: &str, samples: &Vec<String>) -> Option<Regex> {
-    for sample in samples {
+fn first_new_regex(example: &str, samples: &Vec<String>, tried_mask: &[bool]) -> Option<Regex> {
+    for (i, sample) in samples.iter().enumerate() {
+        if tried_mask[i] {
+            continue;
+        }
         let regex_opt = regex_from_pair(example, sample);
         if regex_opt.is_some() {
             return regex_opt;
@@ -80,28 +80,27 @@ fn first_regex(example: &str, samples: &Vec<String>) -> Option<Regex> {
 /// Tries to find a regex that best matches the provided example and the samples
 /// The example may or may not be part of the sample list, it doesn't matter
 /// Note: the resulting regex is case-insensitive (and lowercase)
-pub fn extract_regex(example: String, mut samples: Vec<String>) -> Option<Regex> {
+pub fn infer_regex(example: String, samples: Vec<String>) -> Option<Regex> {
     let mut best_regex = None;
     let mut best_score = 0;
     let total_samples = samples.len();
-    while let Some(new_regex) = first_regex(&example, &samples) {
-        // move the matches to a separate Vec
-        let mut matched = Vec::new();
-        let mut i = 0;
-        while i < samples.len() {
+    let mut tried_mask = vec![false; samples.len()];
+    while let Some(new_regex) = first_new_regex(&example, &samples, &tried_mask) {
+        // count the matches and mark them as tried
+        let mut matched = 0;
+        for i in 0..samples.len() {
             if new_regex.is_match(&samples[i]) {
-                matched.push(samples.remove(i));
-            } else {
-                i += 1;
+                matched += 1;
+                tried_mask[i] = true;
             }
         }
-        if matched.len() == 0 {
+        if matched == 0 {
             // this should not happen but creates an infinite loop so we need to break out of it
-            warn!(target: "auto-regex", "Regex: '{}' failed to match any samples", new_regex.as_str());
-            samples.remove(0);
+            error!(target: "auto-regex", "Extracted regex: '{}' failed to match any samples", new_regex.as_str());
+            return best_regex;
         }
         // score the new regex
-        let new_score = score_regex(&matched, total_samples, &new_regex);
+        let new_score = score_regex(&example, &new_regex, matched, total_samples);
         if new_score > best_score {
             best_regex = Some(new_regex);
             best_score = new_score;
@@ -114,10 +113,23 @@ pub fn extract_regex(example: String, mut samples: Vec<String>) -> Option<Regex>
 mod tests {
     use regex::Regex;
 
-    use crate::extract_regex;
+    use crate::infer_regex;
 
     fn assert_regex_correct(truth: Option<&str>, output: Option<Regex>) {
         assert_eq!(output.map(|r| r.as_str().to_string()), truth.map(|t| t.to_string()))
+    }
+
+    #[test]
+    fn email() {
+        let samples = vec![
+            "john.doe@gmail.com".to_string(),
+            "alice.smith@gmail.com".to_string(),
+            "bob.harris@gmail.com".to_string(),
+            "badsample".to_string(),
+        ];
+        let example = "firstname.lastname@gmail.com".to_string();
+        let output = infer_regex(example, samples);
+        assert_regex_correct(Some(r"(?i)^(.+)\.(.+)@gmail\.com$"), output);
     }
 
     #[test]
@@ -128,7 +140,7 @@ mod tests {
             "[1080p] Episode S1E03.mkv".to_string(),
             "[1080p] Episode S1E10.mkv".to_string(),
         ];
-        let output = extract_regex(samples[0].clone(), samples);
+        let output = infer_regex(samples[0].clone(), samples);
         assert_regex_correct(Some(r"(?i)^\[1080p\] episode s1e(\d+)\.mkv$"), output);
     }
 
@@ -139,7 +151,7 @@ mod tests {
             "picture of a dog.png".to_string(),
             "picture of a zebra.png".to_string(),
         ];
-        let output = extract_regex(samples[0].clone(), samples);
+        let output = infer_regex(samples[0].clone(), samples);
         assert_regex_correct(Some(r"(?i)^picture of a (.+)\.png$"), output);
     }
 
@@ -151,7 +163,7 @@ mod tests {
             "augh".to_string(),
             "fffp".to_string(),
         ];
-        let output = extract_regex(samples[0].clone(), samples);
+        let output = infer_regex(samples[0].clone(), samples);
         assert_regex_correct(None, output);
     }
 
@@ -162,7 +174,7 @@ mod tests {
             "item Number 2.txt".to_string(),
             "Item number 3.txt".to_string(),
         ];
-        let output = extract_regex(samples[0].clone(), samples);
+        let output = infer_regex(samples[0].clone(), samples);
         assert_regex_correct(Some(r"(?i)^item number (\d+)\.txt$"), output);
     }
 
@@ -175,7 +187,7 @@ mod tests {
             "my wallpaper.png".to_string(),
             "auugh".to_string(),
         ];
-        let output = extract_regex(samples[0].clone(), samples);
+        let output = infer_regex(samples[0].clone(), samples);
         assert_regex_correct(Some(r"(?i)^picture of a (.+)\.png$"), output);
     }
 
@@ -191,7 +203,7 @@ mod tests {
             "[1080p] Episode S2E03.mkv".to_string(),
             "[1080p] Episode S2E10.mkv".to_string(),
         ];
-        let output = extract_regex(samples[0].clone(), samples);
+        let output = infer_regex(samples[0].clone(), samples);
         assert_regex_correct(Some(r"(?i)^\[1080p\] episode s(\d+)e(\d+)\.mkv$"), output);
     }
 
@@ -204,7 +216,7 @@ mod tests {
             "[1080p] Episode S1E10 - zebra (zèbre).mkv".to_string(),
             "Bonus Episode.mkv".to_string(),
         ];
-        let output = extract_regex(samples[0].clone(), samples);
+        let output = infer_regex(samples[0].clone(), samples);
         assert_regex_correct(Some(r"(?i)^\[1080p\] episode s1e(\d+) \- (.+) \((.+)\)\.mkv$"), output);
     }
 }

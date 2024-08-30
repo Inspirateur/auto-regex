@@ -2,6 +2,10 @@
 name = "auto-regex"
 version = "0.1.0"
 edition = "2021"
+description = "Automagically finds a regex that best matches an example and a sample list."
+license = "MIT"
+repository = "https://github.com/Inspirateur/auto-regex"
+keywords = ["string", "text", "regex", "filter", "dataset"]
 
 [dependencies]
 lazy_static = "*"
