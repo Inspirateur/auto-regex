@@ -1,6 +1,6 @@
 [package]
 name = "auto-regex"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Automagically finds a regex that best matches an example and a sample list."
 license = "MIT"
