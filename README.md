@@ -6,7 +6,8 @@ Rust crate to find a regex rules that best matches a list of string
 use auto_regex::infer_regex;
 
 fn main() {
-    // This has very little interest in static code and is best used with user interaction
+    // This has very little interest in static code 
+    // and is best used with user interaction
     let samples = vec![
         "john.doe@gmail.com".to_string(),
         "alice.smith@gmail.com".to_string(),
