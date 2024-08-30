@@ -8,7 +8,7 @@ repository = "https://github.com/Inspirateur/auto-regex"
 keywords = ["string", "text", "regex", "filter", "dataset"]
 
 [dependencies]
-lazy_static = "*"
-difflib = "*"
-regex = "*"
-log = "*"
+lazy_static = "1.5"
+difflib = "0.4"
+regex = "1.10"
+log = "0.4"
