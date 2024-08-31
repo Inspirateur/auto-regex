@@ -64,13 +64,16 @@ fn score_regex(example: &str, regex: &Regex, matched: usize, total: usize) -> i3
     ((matched_part*variable_part)*100.) as i32
 }
 
-fn first_new_regex(example: &str, samples: &Vec<String>, tried_mask: &[bool]) -> Option<Regex> {
+fn first_new_regex(example: &str, samples: &Vec<String>, tried_mask: &mut [bool]) -> Option<Regex> {
     for (i, sample) in samples.iter().enumerate() {
         if tried_mask[i] {
             continue;
         }
         let regex_opt = regex_from_pair(example, sample);
         if regex_opt.is_some() {
+            // this shouldn't be necessary but if the extracted regex does not match the sample 
+            // it would create an infinite loop 
+            tried_mask[i] = true;
             return regex_opt;
         }
     }
@@ -85,7 +88,7 @@ pub fn infer_regex(example: String, samples: Vec<String>) -> Option<Regex> {
     let mut best_score = 0;
     let total_samples = samples.len();
     let mut tried_mask = vec![false; samples.len()];
-    while let Some(new_regex) = first_new_regex(&example, &samples, &tried_mask) {
+    while let Some(new_regex) = first_new_regex(&example, &samples, &mut tried_mask) {
         // count the matches and mark them as tried
         let mut matched = 0;
         for i in 0..samples.len() {
@@ -93,11 +96,6 @@ pub fn infer_regex(example: String, samples: Vec<String>) -> Option<Regex> {
                 matched += 1;
                 tried_mask[i] = true;
             }
-        }
-        if matched == 0 {
-            // this should not happen but creates an infinite loop so we need to break out of it
-            error!(target: "auto-regex", "Extracted regex: '{}' failed to match any samples", new_regex.as_str());
-            return best_regex;
         }
         // score the new regex
         let new_score = score_regex(&example, &new_regex, matched, total_samples);
@@ -214,9 +212,13 @@ mod tests {
             "[1080p] Episode S1E02 - cat (chat).mkv".to_string(),
             "[1080P] Episode S1E03 - bird (oiseau).mkv".to_string(),
             "[1080p] Episode S1E10 - zebra (zèbre).mkv".to_string(),
+            "[1080p] Episode S2E01 - turtle (tortue).mkv".to_string(),
+            "[1080p] Episode S2E02 - seahorse (hippocampe).mkv".to_string(),
+            "[1080P] episode s2e03 - giraffe (giraffe).mkv".to_string(),
+            "[1080p] Episode S2E10 - rabbit (lapin).mkv".to_string(),
             "Bonus Episode.mkv".to_string(),
         ];
         let output = infer_regex(samples[0].clone(), samples);
-        assert_regex_correct(Some(r"(?i)^\[1080p\] episode s1e(\d+) \- (.+) \((.+)\)\.mkv$"), output);
+        assert_regex_correct(Some(r"(?i)^\[1080p\] episode s(\d+)e(\d+) \- (.+) \((.+)\)\.mkv$"), output);
     }
 }
