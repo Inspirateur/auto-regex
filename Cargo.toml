@@ -1,6 +1,6 @@
 [package]
 name = "auto-regex"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Automagically finds a regex that best matches an example and a sample list."
 license = "MIT"
@@ -11,4 +11,3 @@ keywords = ["string", "text", "regex", "filter", "dataset"]
 lazy_static = "1.5"
 difflib = "0.4"
 regex = "1.10"
-log = "0.4"

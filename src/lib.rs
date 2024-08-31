@@ -2,7 +2,6 @@ use std::i32;
 use difflib::sequencematcher::SequenceMatcher;
 use lazy_static::lazy_static;
 use regex::Regex;
-use log::error;
 
 lazy_static! {
     static ref RE_TOK: Regex =
