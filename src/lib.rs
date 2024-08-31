@@ -16,6 +16,7 @@ fn tokenize(text: &str) -> Vec<String> {
 }
 
 fn regex_from_pair(sample1: &str, sample2: &str) -> Option<Regex> {
+    // TODO: in some cases the extracted Regex does not match one of the sample, inspect it...
     let seq1 = tokenize(sample1);
     let seq2 = tokenize(sample2);
     let mut seq_matcher = SequenceMatcher::new(&seq1, &seq2);
